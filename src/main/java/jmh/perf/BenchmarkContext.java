@@ -1,24 +1,23 @@
 package jmh.perf;
 
 import java.util.Set;
-import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 
-import org.zeromq.ZMQ.Error;
+import org.zeromq.ZMQException;
 
 import jmh.ThreadBuilder;
 import lombok.Getter;
 import zmq.Ctx;
 import zmq.Msg;
 import zmq.SocketBase;
-import zmq.ZError;
 import zmq.ZMQ;
 
 /**
- * A abstract class from which you can derive class that will be used as JMH state
+ * A ZMQ wrapper that provides convienient methods to run ZMQ benchs.
+ * 
  * @author Fabrice Bacchella
  *
  */
@@ -29,13 +28,13 @@ public class BenchmarkContext {
     private final Thread.UncaughtExceptionHandler failureHandler = this::errorHandler;
     private final Thread server;
     private final Ctx ctx;
-    private final ElementsFactory factory;
+    private final ZMQFactory factory;
+    private final ZMQFactory.ServerProcessing processing;
 
-    // Used to handle failing server
-    final Set<Thread> benchTreads = ConcurrentHashMap.newKeySet();
+    // Used to handle failing server and notify every benchmark threads
+    private final Set<Thread> benchTreads = ConcurrentHashMap.newKeySet();
 
-    public BenchmarkContext(ElementsFactory factory) {
-        // RmiProvider.start();
+    public BenchmarkContext(ZMQFactory factory) {
         this.factory = factory;
         ctx = factory.getContext();
         ctx.setUncaughtExceptionHandler((t, e) -> {
@@ -43,12 +42,8 @@ public class BenchmarkContext {
             RmiProvider.stop();
             System.exit(1);
         });
+        processing = factory.withServer() ? factory.getServerProcessing(this) : null;
         server = factory.withServer() ? getServer() : null;
-    }
-
-    private void errorHandler(Thread t, Throwable ex) {
-        failure.completeExceptionally(ex);
-        benchTreads.forEach(Thread::interrupt);
     }
 
     /**
@@ -61,23 +56,17 @@ public class BenchmarkContext {
             Thread.currentThread().interrupt();
         }
         ThreadBuilder.get().setTask(() -> ctx.terminate()).build(true);
-        // RmiProvider.stop();
     }
 
-    /**
-     * Might be called in Start setup to call in internal server
-     * @throws InterruptedException
-     * @throws BrokenBarrierException
-     */
-    private Thread  getServer() {
+    private Thread getServer() {
         Thread t = ThreadBuilder.get()
                                 .setDaemon(false)
                                 .setTask(this::runServer)
                                 .setExceptionHandler(failureHandler)
                                 .setName("ZMQServer")
                                 .build(true);
-        // Wait for the server to be started
         try {
+            // Wait for the server to be started
             serverBarrier.await();
             return t;
         } catch (InterruptedException e) {
@@ -86,12 +75,17 @@ public class BenchmarkContext {
         }
     }
 
+    private void errorHandler(Thread t, Throwable ex) {
+        failure.completeExceptionally(ex);
+        benchTreads.forEach(Thread::interrupt);
+    }
+
     public void stopServer() throws InterruptedException {
-        if (serverRunning()) {
+        if (server != null && serverRunning()) {
             server.interrupt();
         }
     }
-    
+
     public boolean serverRunning() {
         return server != null && server.isAlive();
     }
@@ -101,38 +95,18 @@ public class BenchmarkContext {
         try {
             boolean rc = serverSocket.bind(factory.getUrl());
             if (!rc) {
-                printError("error in server connect", serverSocket.errno());
-                return;
+                throw new ZMQException("error in server bind", serverSocket.errno());
             }
             serverBarrier.countDown();
             while (! Thread.interrupted()) {
-                Msg cmsg = serverSocket.recv(0);
-                if (cmsg == null) {
-                    printError("error in server recvmsg", serverSocket.errno());
-                    return;
-                }
-                if (factory.waitAnswser()) {
-                    Msg smsg = factory.getServerMsg(cmsg);
-                    rc = serverSocket.send(smsg, 0);
-                    if (!rc) {
-                        printError("error in server send", serverSocket.errno());
-                        return;
-                    }
-                }
+                processing.process(serverSocket);
             }
         } finally {
             serverSocket.close();
         }
     }
 
-    private static void printError(String message, int errno) {
-        if (errno != ZError.EINTR) {
-            Error err = Error.findByCode(errno);
-            System.out.format("%s: %s\n", message, err.getMessage());
-        }
-    }
-
-    public boolean checkServer() {
+    private boolean checkServer() {
         if (server != null) {
             if (failure.isCompletedExceptionally()) {
                 try {
@@ -144,17 +118,17 @@ public class BenchmarkContext {
                 }
                 return false;
             } else {
-                return true;
+               return true;
             }
         } else {
             return true;
         }
     }
-    
+
     public StatefullSocket getSocketState() {
         return new StatefullSocket();
     }
-    
+
     public class StatefullSocket implements AutoCloseable {
 
         @Getter
@@ -164,7 +138,7 @@ public class BenchmarkContext {
             benchTreads.add(Thread.currentThread());
             socket = factory.getClientSocket(ctx);
             if (! ZMQ.connect(socket, factory.getUrl())) {
-                throw new IllegalStateException("error in connect: " + ZMQ.strerror(socket.errno()));
+                throw new ZMQException("error in connect", socket.errno());
             }
         }
 
@@ -177,22 +151,78 @@ public class BenchmarkContext {
 
     }
 
-    public void iteration(SocketBase s, int msgSize) {
+    /**
+     * A method that can be used in a server loop or a client benchmark<p>
+     * Send a message, but don't expect an answer
+     * @param s The socket to use for the message
+     * @param msgSize the message size
+     */
+    public void simpleSendMessage(SocketBase s, int msgSize) {
         if (! checkServer()) {
             throw new IllegalStateException("Server is dead");
         }
-        Msg msg = factory.getClientMsg(msgSize);
+        Msg msg = factory.getQueryMsg(msgSize);
         boolean rc = s.send(msg, 0);
         if (! rc) {
-            throw new IllegalStateException("error in send: " + ZMQ.strerror(s.errno()));
+            throw new ZMQException("error in simpleSendMessage:send", s.errno());
         }
         if (! checkServer()) {
             throw new IllegalStateException("Server is dead");
         }
+    }
+
+    /**
+     * A method that can be used in a server loop or a client benchmark<p>
+     * Send a message, and wait for an answer
+     * @param s The socket to use for the message
+     * @param msgSize the message size
+     */
+    public void queryAnswerMessage(SocketBase s, int msgSize) {
+        if (! checkServer()) {
+            throw new IllegalStateException("Server is dead");
+        }
+        Msg msg = factory.getQueryMsg(msgSize);
+        boolean rc = s.send(msg, 0);
+        if (! rc) {
+            throw new ZMQException("error in queryAnswerMessage:send", s.errno());
+        }
+        if (! checkServer()) {
+            throw new IllegalStateException("Server is dead");
+        }
+        Msg smsg = s.recv(0);
+        if (smsg == null) {
+            throw new ZMQException("error in queryAnswerMessage:recv", s.errno());
+        }
+    }
+
+    /**
+     * A method that can be used in a server loop or a client benchmark<p>
+     * Consume a received message
+     * @param s The query message
+     */
+    public void consume(SocketBase s) {
+        Msg cmsg = s.recv(0);
+        if (cmsg == null) {
+            throw new ZMQException("error in consume:recv", s.errno());
+        }
+    }
+
+    /**
+     * A method that can be used in a server loop or a client benchmark<p>
+     * Wait for a message and process it
+     * @param s The query message
+     */
+    public void processMessage(SocketBase s) {
+        boolean rc;
+        Msg cmsg = s.recv(0);
+        if (cmsg == null) {
+            throw new ZMQException("error in consume:recv", s.errno());
+        }
         if (factory.waitAnswser()) {
-            Msg smsg = s.recv(0);
-            if (smsg == null) {
-                throw new IllegalStateException("error in recv: " + ZMQ.strerror(s.errno()));
+            Msg smsg = factory.getAnswerMsg(cmsg);
+            rc = s.send(smsg, 0);
+            if (!rc) {
+                throw new ZMQException("error in consume:send", s.errno());
             }
         }
     }

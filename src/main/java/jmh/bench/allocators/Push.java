@@ -13,7 +13,7 @@ public class Push {
 
     @Benchmark
     public void fireAndForget(ZmqState state, ThreadState threadState) throws Exception {
-        state.zctx.iteration(threadState.s.getSocket(), state.msgSize);
+        state.zctx.simpleSendMessage(threadState.s.getSocket(), state.msgSize);
     }
 
 }

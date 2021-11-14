@@ -1,16 +1,21 @@
 package jmh.bench.allocators;
 
-import jmh.perf.ElementsFactory;
+import jmh.perf.BenchmarkContext;
+import jmh.perf.ZMQFactory;
 import zmq.Ctx;
 import zmq.Msg;
 import zmq.SocketBase;
 import zmq.ZMQ;
 import zmq.msg.MsgAllocator;
 
-public class AllocatorFactory implements ElementsFactory {
+/**
+ * @author fa4
+ *
+ */
+public class AllocatorFactory implements ZMQFactory {
 
     private final MsgAllocator na;
-    
+
     AllocatorFactory(MsgAllocator na) {
         this.na = na;
     }
@@ -41,12 +46,12 @@ public class AllocatorFactory implements ElementsFactory {
     }
 
     @Override
-    public Msg getClientMsg(int msgSize) {
+    public Msg getQueryMsg(int msgSize) {
         return na.allocate(msgSize);
     }
 
     @Override
-    public Msg getServerMsg(Msg cmsg) {
+    public Msg getAnswerMsg(Msg cmsg) {
         return null;
     }
 
@@ -58,6 +63,11 @@ public class AllocatorFactory implements ElementsFactory {
     @Override
     public boolean waitAnswser() {
         return false;
+    }
+
+    @Override
+    public ServerProcessing getServerProcessing(BenchmarkContext ctx) {
+        return ctx::consume;
     }
 
 }
