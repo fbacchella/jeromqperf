@@ -91,14 +91,9 @@ public class Run {
                 .shouldDoGC(true)
                 .param("msgSend", Integer.toString(msgSend))
                 .forks(forks);
-        
-//
-//        if (tests.size() == 0) {
-//            builder.include("jmh.perf\\.*");
-//        } else {
-//            tests.stream().map(t -> "jmh.perf." + t).forEach(builder::include);
-//        }
-//
+
+        options.nonOptionArguments().stream().map(Object::toString).forEach(builder::include);
+
         if (options.has(logfileOption)) {
             String logfile = options.valueOf(logfileOption);
             builder.output(logfile);
