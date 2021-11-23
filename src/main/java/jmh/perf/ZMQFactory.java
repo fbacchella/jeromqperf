@@ -19,7 +19,7 @@ public interface ZMQFactory {
      * @return True if a server is needed
      */
     boolean withServer();
-    
+
     /**
      * 
      * @return True if an answer is expected from the server
@@ -67,7 +67,7 @@ public interface ZMQFactory {
     Msg getAnswerMsg(Msg cmsg);
 
     /**
-     * The processing in the server
+     * The processing in the server. It can directly call many helpers functions from the {@link BenchmarkContext}
      * @return
      */
     ServerProcessing getServerProcessing(BenchmarkContext ctx);

@@ -9,7 +9,7 @@ import zmq.ZMQ;
 import zmq.msg.MsgAllocator;
 
 /**
- * @author fa4
+ * @author Fabrice Bacchella
  *
  */
 public class AllocatorFactory implements ZMQFactory {

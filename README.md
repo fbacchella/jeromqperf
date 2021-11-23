@@ -3,6 +3,8 @@ JMH benchmark classes.
 
 A simple example, used to test allocators can be found in the package `jmh.bench.allocators`.
 
+The ZMQ context and runner will be provided by a class using the JMH annotation `org.openjdk.jmh.annotations.State(Scope.Benchmark)` what will be provided to each benchmark. This class needs to instantiate a `jmh.perf.BenchmarkContext` that will be used by each benchmark. THis class provides a single ZMQ context, and many helpers methods that can be used by individual benchmarks. This class is given an instance of a class implementing `jmh.perf.BenchmarkContext`, specifics to a set of benchmark that describe the elemets of ZMQ that needs to be measured.
+
 It generate a simple `jeromqperf.jar` that will launch run.
 
 Usage:

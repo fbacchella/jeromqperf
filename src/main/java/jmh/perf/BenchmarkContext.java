@@ -16,7 +16,7 @@ import zmq.SocketBase;
 import zmq.ZMQ;
 
 /**
- * A ZMQ wrapper that provides convienient methods to run ZMQ benchs.
+ * A ZMQ wrapper that provides convenient methods to run ZMQ benchs.
  * 
  * @author Fabrice Bacchella
  *
