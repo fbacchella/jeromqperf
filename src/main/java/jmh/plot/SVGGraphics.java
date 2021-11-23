@@ -29,8 +29,4 @@ class SVGGraphics extends SVGGraphics2D {
         return domGroupManager;
     }
 
-    SVGGeneratorContext generatorCtx() {
-        return generatorCtx;
-    }
-
 }

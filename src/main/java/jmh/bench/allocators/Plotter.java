@@ -1,4 +1,4 @@
-package jmh.allocators;
+package jmh.bench.allocators;
 
 import java.io.IOException;
 import java.nio.CharBuffer;

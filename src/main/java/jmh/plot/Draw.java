@@ -77,8 +77,8 @@ public class Draw {
 
     public static void anchoredText(SVGGraphics svgGenerator, String string, int x, int y, String textAnchor) {
         Element text = svgGenerator.getDOMFactory().createElementNS(SVGConstants.SVG_NAMESPACE_URI, SVGConstants.SVG_TEXT_TAG);
-        text.setAttributeNS(null, SVGConstants.SVG_X_ATTRIBUTE, svgGenerator.generatorCtx().doubleString(x));
-        text.setAttributeNS(null, SVGConstants.SVG_Y_ATTRIBUTE, svgGenerator.generatorCtx().doubleString(y));
+        text.setAttributeNS(null, SVGConstants.SVG_X_ATTRIBUTE, svgGenerator.getGeneratorContext().doubleString(x));
+        text.setAttributeNS(null, SVGConstants.SVG_Y_ATTRIBUTE, svgGenerator.getGeneratorContext().doubleString(y));
         //center text
         text.setAttributeNS(null, "text-anchor", textAnchor);
 

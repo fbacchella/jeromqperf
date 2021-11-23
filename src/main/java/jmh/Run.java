@@ -105,23 +105,9 @@ public class Run {
             builder.resultFormat(ResultFormatType.JSON);
         }
 
-        if (options.has("f")) {
-            //builder.param("allocator", "heap", "direct")
-            //       .param("msgSize", "1", "10");
-//          builder.param("allocator", "nettyHeap", "heap")
-//          .param("msgSend", "1000")
-//          .param("msgSize", "10000000");
-        }
-
         if (options.has(profilerOption)) {
-            String profilerName = options.valueOf(profilerOption);
-            try {
-                @SuppressWarnings("unchecked")
-                Class<Profiler> profilerClass = (Class<Profiler>) Run.class.getClassLoader().loadClass("org.openjdk.jmh.profile." + profilerName);
-                builder.addProfiler(profilerClass);
-            } catch (ClassNotFoundException | ClassCastException e) {
-                throw new IllegalArgumentException("Invalid profiler name " + profilerName + ": " + e.getMessage());
-            }
+            Class<Profiler> profilerClass = findProfilerClass(options.valueOf(profilerOption));
+            builder.addProfiler(profilerClass);
         }
 
         Options opt = builder.build();
@@ -150,6 +136,21 @@ public class Run {
         }
     }
     
+    @SuppressWarnings("unchecked")
+    private static Class<Profiler> findProfilerClass(String profilerName) {
+        try {
+            Class<Profiler> profilerClass;
+            try {
+                profilerClass = (Class<Profiler>) Run.class.getClassLoader().loadClass("org.openjdk.jmh.profile." + profilerName);
+            } catch (ClassNotFoundException | ClassCastException e) {
+                profilerClass = (Class<Profiler>) Run.class.getClassLoader().loadClass(profilerName);
+            }
+            return profilerClass;
+        } catch (ClassNotFoundException | ClassCastException e) {
+            throw new IllegalArgumentException("Invalid profiler name " + profilerName + ": " + e.getMessage());
+        }
+    }
+
     private static Plotter resolvPlotter(String benchClassName) {
         try {
             Class<?> bebench = Run.class.getClassLoader().loadClass(benchClassName);
@@ -158,7 +159,7 @@ public class Run {
             return plotterClass.getConstructor().newInstance();
         } catch (ClassNotFoundException | InstantiationException | IllegalAccessException | IllegalArgumentException
                 | InvocationTargetException | NoSuchMethodException | SecurityException e) {
-            throw new IllegalArgumentException("No plotting for the benchmar " + benchClassName);
+            throw new IllegalArgumentException("No plotting for the benchmark " + benchClassName);
         }
     }
 }

@@ -7,7 +7,6 @@ import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Mode;
 import org.openjdk.jmh.annotations.OutputTimeUnit;
 
-import jmh.allocators.Plotter;
 import jmh.plot.PlottingClass;
 
 @PlottingClass(plotter = Plotter.class)
